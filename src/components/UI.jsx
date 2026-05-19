@@ -72,7 +72,7 @@ export function Modal({ open, onClose, title, children, wide }) {
         onClick={e => e.stopPropagation()}
         style={{
           background: C.card, borderRadius: 18,
-          width: wide ? 780 : 520, maxWidth: '100%',
+          width: wide ? '50vw' : 600, maxWidth: '100%',
           maxHeight: '88vh', overflowY: 'auto',
           padding: '32px 36px',
           boxShadow: '0 24px 72px rgba(15,52,96,.22)',

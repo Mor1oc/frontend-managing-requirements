@@ -85,7 +85,7 @@ export default function AnalyticsPage({ selectedProject }) {
   const ecoByStatus   = toChart(countBy(ecos,      'status'));
   const apprByStatus  = toChart(countBy(approvals, 'status'));
   const ecrByPriority = toChart(countBy(ecrs,      'priority'));
-  const reqByType     = toChart(countBy(reqs,      'type_name'));
+  const reqByType     = toChart(countBy(reqs,      'type'));
 
   const baselineCount = reqs.filter(r => r.is_baseline).length;
   const openEcrs      = ecrs.filter(e => e.status === 'open' || e.status === 'review').length;

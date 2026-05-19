@@ -6,22 +6,24 @@ import {
   Card, Table, PageHeader, Btn, Modal,
   InfoGrid, StatusBadge, Input, Textarea, Select, ErrorBanner, Spinner,
 } from '../components/UI';
+import PDFViewer from '../components/PDFViewer';
 import { CreateDocumentModal } from './DocumentsPage';
 
-/* ── Create Requirement (supervisor only) ─────────────────────────────────── */
+/* ── Создание требования (только супервайзер) ─────────────────────────────── */
 function CreateRequirementModal({ open, onClose, onCreated, selectedProject, documents }) {
   const { token, user } = useAuth();
-  const [title,        setTitle]        = useState('');
-  const [desc,         setDesc]         = useState('');
-  const [extId,        setExtId]        = useState('');
-  const [typeName,     setTypeName]     = useState('');
-  const [reqTypes,     setReqTypes]     = useState([]);
-  const [sourceDocId,  setSourceDocId]  = useState('');
-  const [sourceClause, setSourceClause] = useState('');
-  const [loading,      setLoading]      = useState(false);
-  const [err,          setErr]          = useState('');
-  const [showNewDoc,   setShowNewDoc]   = useState(false);
-  const [localDocs,    setLocalDocs]    = useState([]);
+  const [title,         setTitle]         = useState('');
+  const [desc,          setDesc]          = useState('');
+  const [extId,         setExtId]         = useState('');
+  const [typeName,      setTypeName]      = useState('');
+  const [versionNumber, setVersionNumber] = useState(1);
+  const [reqTypes,      setReqTypes]      = useState([]);
+  const [sourceDocId,   setSourceDocId]   = useState('');
+  const [sourceClause,  setSourceClause]  = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [err,           setErr]           = useState('');
+  const [showNewDoc,    setShowNewDoc]    = useState(false);
+  const [localDocs,     setLocalDocs]     = useState([]);
 
   useEffect(() => { setLocalDocs(documents ?? []); }, [documents]);
 
@@ -30,7 +32,7 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
     API.reqTypes(token)
       .then(t => { setReqTypes(t ?? []); if (t?.length) setTypeName(t[0].name); })
       .catch(() => {});
-    setTitle(''); setDesc(''); setExtId('');
+    setTitle(''); setDesc(''); setExtId(''); setVersionNumber(1);
     setSourceDocId(''); setSourceClause(''); setErr('');
   }, [open]);
 
@@ -43,6 +45,7 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
         project_id:              selectedProject.id,
         type_name:               typeName,
         title:                   title.trim(),
+        version_number:          versionNumber,       // всегда передаём явно
         description:             desc             || undefined,
         external_id:             extId            || undefined,
         source_document_id:      sourceDocId      || undefined,
@@ -56,31 +59,40 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
 
   return (
     <>
-      <Modal open={open && !showNewDoc} onClose={onClose} title="Создать требование (v1)" wide>
+      <Modal open={open && !showNewDoc} onClose={onClose} title="Создать требование" wide>
         <div style={{
           background: '#EFF6FF', borderRadius: 9, padding: '10px 16px', marginBottom: 20,
           fontSize: 13, color: C.muted,
         }}>
           Проект: <strong style={{ color: C.navy }}>{selectedProject?.name ?? '—'}</strong>
-          &nbsp;·&nbsp;Статус по умолчанию: <StatusBadge status="draft" />
+          &nbsp;·&nbsp;Начальный статус: <StatusBadge status="draft" />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 12 }}>
+          <div style={{ gridColumn: '1 / 3' }}>
+            <Input label="Название" value={title} onChange={setTitle}
+              placeholder="Система должна…" required />
+          </div>
+          <Input
+            label="Версия"
+            type="number"
+            value={String(versionNumber)}
+            onChange={v => setVersionNumber(Math.max(1, parseInt(v) || 1))}
+          />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Input label="Название" value={title} onChange={setTitle}
-            placeholder="Система должна…" required />
-          <Input label="Внешний ID" value={extId} onChange={setExtId}
-            placeholder="REQ-001" />
+          <Input label="Внешний ID" value={extId} onChange={setExtId} placeholder="REQ-001" />
+          <Select
+            label="Тип требования" value={typeName} onChange={setTypeName} required
+            options={reqTypes.map(t => ({ value: t.name, label: t.name }))}
+          />
         </div>
-
-        <Select
-          label="Тип требования" value={typeName} onChange={setTypeName} required
-          options={reqTypes.map(t => ({ value: t.name, label: t.name }))}
-        />
 
         <Textarea label="Описание" value={desc} onChange={setDesc}
           placeholder="Подробное описание…" rows={4} />
 
-        {/* Source document selector */}
+        {/* Документ-источник */}
         <div style={{ marginBottom: 16 }}>
           <label style={{
             display: 'block', marginBottom: 6,
@@ -100,9 +112,7 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
             >
               <option value="">— Без источника —</option>
               {localDocs.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.title} (v{d.version_number})
-                </option>
+                <option key={d.id} value={d.id}>{d.title} (v{d.version_number})</option>
               ))}
             </select>
             <Btn small variant="ghost" onClick={() => setShowNewDoc(true)}>
@@ -125,7 +135,6 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
         </div>
       </Modal>
 
-      {/* nested: create document while in this modal */}
       <CreateDocumentModal
         open={showNewDoc}
         onClose={() => setShowNewDoc(false)}
@@ -136,17 +145,17 @@ function CreateRequirementModal({ open, onClose, onCreated, selectedProject, doc
         }}
         selectedProject={selectedProject}
         token={token}
-        user={user}
       />
     </>
   );
 }
 
-/* ── Requirement detail modal ─────────────────────────────────────────────── */
+/* ── Детали требования ────────────────────────────────────────────────────── */
 function RequirementModal({ open, req, onClose, onCreateECR, onCreateApproval, isSuper, documents }) {
   const { token } = useAuth();
-  const [versions, setVersions] = useState([]);
-  const [loadingV, setLoadingV] = useState(false);
+  const [versions,  setVersions]  = useState([]);
+  const [loadingV,  setLoadingV]  = useState(false);
+  const [pdfDocId,  setPdfDocId]  = useState(null);   // открыть PDF просмотр
 
   useEffect(() => {
     if (!open || !req) return;
@@ -158,115 +167,119 @@ function RequirementModal({ open, req, onClose, onCreateECR, onCreateApproval, i
   }, [open, req?.id]);
 
   if (!req) return null;
+
   const sourceDoc = documents?.find(d => d.id === req.source_document_id);
 
   return (
-    <Modal open={open} onClose={onClose} title={req.title} wide>
-      {req.description && (
-        <p style={{ color: C.text, marginBottom: 20, lineHeight: 1.7, fontSize: 15 }}>
-          {req.description}
-        </p>
-      )}
+    <>
+      <Modal open={open} onClose={onClose} title={req.title} wide>
+        {req.description && (
+          <p style={{ color: C.text, marginBottom: 20, lineHeight: 1.7, fontSize: 15 }}>
+            {req.description}
+          </p>
+        )}
 
-      <InfoGrid items={[
-        ['Внешний ID',   req.external_id ?? '—',  false],
-        ['Тип',          req.type_name   ?? '—',  false],
-        ['Версия',       `v${req.version_number}`, false],
-        ['Статус',       req.status,               true ],
-        ['Проект',       req.project_name ?? '—',  false],
-        ['Baseline',     req.is_baseline ? 'Да' : 'Нет', false],
-        ['Создано',      req.created_at ? new Date(req.created_at).toLocaleDateString('ru') : '—', false],
-        ['Изменено',     req.changed_at ? new Date(req.changed_at).toLocaleDateString('ru') : '—', false],
-      ]} />
+        <InfoGrid items={[
+          ['Внешний ID',  req.external_id ?? '—',  false],
+          ['Тип',         req.type   ?? '—',  false],
+          ['Версия',      `v${req.version_number}`, false],
+          ['Статус',      req.status,               true ],
+          ['Проект',      req.project_name ?? '—',  false],
+          ['Baseline',    req.is_baseline ? 'Да' : 'Нет', false],
+          ['Создано',     req.created_at ? new Date(req.created_at).toLocaleDateString('ru') : '—', false],
+          ['Изменено',    req.changed_at  ? new Date(req.changed_at).toLocaleDateString('ru')  : '—', false],
+        ]} />
 
-      {/* Source document with PDF open button */}
-      {req.source_document_id && (
-        <div style={{
-          background: '#EFF6FF', borderRadius: 9,
-          padding: '12px 16px', marginBottom: 16,
-        }}>
+        {/* Документ-источник с кнопкой просмотра PDF */}
+        {req.source_document_id && (
           <div style={{
-            fontSize: 11, fontWeight: 700, color: C.muted,
-            textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6,
-          }}>Документ-источник</div>
-          <div style={{ fontWeight: 600, color: C.navy }}>
-            {sourceDoc?.title ?? `ID: ${req.source_document_id.slice(0, 8)}…`}
-          </div>
-          {req.source_clause && (
-            <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>
-              Пункт: <strong style={{ color: C.text }}>{req.source_clause}</strong>
+            background: '#EFF6FF', borderRadius: 9,
+            padding: '12px 16px', marginBottom: 16,
+          }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, color: C.muted,
+              textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6,
+            }}>
+              Документ-источник
             </div>
-          )}
-          {/* Open PDF — tries to jump to clause with #search fragment */}
-          <div style={{ marginTop: 10 }}>
+            <div style={{ fontWeight: 600, color: C.navy, marginBottom: 4 }}>
+              {sourceDoc?.title ?? `ID: ${req.source_document_id.slice(0, 8)}…`}
+            </div>
+            {req.source_clause && (
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>
+                Пункт: <strong style={{ color: C.text }}>{req.source_clause}</strong>
+              </div>
+            )}
             {sourceDoc?.file_path ? (
-              <a
-                href={`${API.docFileUrl(req.source_document_id)}${req.source_clause
-                  ? `#search=${encodeURIComponent(req.source_clause)}` : ''}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Btn small variant="accent">
-                  📄 Открыть PDF{req.source_clause ? ' · перейти к пункту' : ''}
-                </Btn>
-              </a>
+              <Btn small variant="accent" onClick={() => setPdfDocId(sourceDoc.id)}>
+                📄 Открыть документ
+              </Btn>
             ) : (
               <span style={{ fontSize: 12, color: C.muted }}>PDF-файл не прикреплён</span>
             )}
           </div>
-        </div>
-      )}
-
-      {req.change_reason && (
-        <div style={{
-          background: '#FFFBEB', border: '1px solid #FDE68A',
-          borderRadius: 9, padding: '12px 16px', marginBottom: 16,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>
-            ПРИЧИНА ИЗМЕНЕНИЯ
-          </div>
-          <div style={{ fontSize: 14, color: C.text }}>{req.change_reason}</div>
-        </div>
-      )}
-
-      {/* Version history */}
-      {loadingV ? <Spinner size={24} /> : versions.length > 1 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 10 }}>
-            История версий
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {versions.map(v => (
-              <span key={v.version_number} style={{
-                background: v.is_baseline ? '#DCFCE7' : C.accent,
-                color:      v.is_baseline ? '#14532D' : C.navy,
-                border:     `1px solid ${v.is_baseline ? '#86EFAC' : C.border}`,
-                padding: '5px 14px', borderRadius: 999,
-                fontSize: 13, fontWeight: 600,
-              }}>
-                v{v.version_number} · {v.status}{v.is_baseline && ' ✓'}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8 }}>
-        <Btn variant="ghost" onClick={onClose}>Закрыть</Btn>
-        {isSuper && (
-          <Btn variant="outline" onClick={() => { onClose(); onCreateApproval(req); }}>
-            + Подтверждение
-          </Btn>
         )}
-        <Btn onClick={() => { onClose(); onCreateECR(req); }}>
-          Создать запрос на изменение
-        </Btn>
-      </div>
-    </Modal>
+
+        {req.change_reason && (
+          <div style={{
+            background: '#FFFBEB', border: '1px solid #FDE68A',
+            borderRadius: 9, padding: '12px 16px', marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E', marginBottom: 4 }}>
+              ПРИЧИНА ИЗМЕНЕНИЯ
+            </div>
+            <div style={{ fontSize: 14, color: C.text }}>{req.change_reason}</div>
+          </div>
+        )}
+
+        {/* История версий */}
+        {loadingV ? <Spinner size={24} /> : versions.length > 1 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 10 }}>
+              История версий
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {versions.map(v => (
+                <span key={v.version_number} style={{
+                  background: v.is_baseline ? '#DCFCE7' : C.accent,
+                  color:      v.is_baseline ? '#14532D' : C.navy,
+                  border:     `1px solid ${v.is_baseline ? '#86EFAC' : C.border}`,
+                  padding: '5px 14px', borderRadius: 999,
+                  fontSize: 13, fontWeight: 600,
+                }}>
+                  v{v.version_number} · {v.status}{v.is_baseline && ' ✓'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8 }}>
+          <Btn variant="ghost" onClick={onClose}>Закрыть</Btn>
+          {isSuper && (
+            <Btn variant="outline" onClick={() => { onClose(); onCreateApproval(req); }}>
+              + Подтверждение
+            </Btn>
+          )}
+          <Btn onClick={() => { onClose(); onCreateECR(req); }}>
+            Создать запрос на изменение
+          </Btn>
+        </div>
+      </Modal>
+
+      {/* PDF просмотр источника */}
+      <PDFViewer
+        open={!!pdfDocId}
+        docId={pdfDocId}
+        title={sourceDoc?.title ?? 'Документ'}
+        hasFile={!!sourceDoc?.file_path}
+        onClose={() => setPdfDocId(null)}
+      />
+    </>
   );
 }
 
-/* ── Create Approval ──────────────────────────────────────────────────────── */
+/* ── Подтверждение выполнимости ───────────────────────────────────────────── */
 function CreateApprovalModal({ open, req, onClose, onCreated }) {
   const { token, user } = useAuth();
   const [comment, setComment] = useState('');
@@ -310,7 +323,7 @@ function CreateApprovalModal({ open, req, onClose, onCreated }) {
   );
 }
 
-/* ── Create ECR ───────────────────────────────────────────────────────────── */
+/* ── Создание ECR ─────────────────────────────────────────────────────────── */
 function CreateECRModal({ open, initialReq, allReqs, selectedProject, onClose, onCreated }) {
   const { token, user } = useAuth();
   const [title,    setTitle]    = useState('');
@@ -330,8 +343,8 @@ function CreateECRModal({ open, initialReq, allReqs, selectedProject, onClose, o
   const toggle = id => setSelIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const submit = async () => {
-    if (!title.trim())     { setErr('Введите название'); return; }
-    if (!selectedProject)  { setErr('Выберите проект');  return; }
+    if (!title.trim())    { setErr('Введите название'); return; }
+    if (!selectedProject) { setErr('Выберите проект');  return; }
     setLoading(true); setErr('');
     try {
       const links = allReqs
@@ -378,6 +391,7 @@ function CreateECRModal({ open, initialReq, allReqs, selectedProject, onClose, o
                 onChange={() => toggle(r.id)}
                 style={{ accentColor: C.btn, width: 16, height: 16 }} />
               <span style={{ flex: 1, fontSize: 14 }}>{r.title}</span>
+              <span style={{ fontSize: 12, color: C.muted }}>v{r.version_number}</span>
               <StatusBadge status={r.status} />
             </label>
           ))}
@@ -395,14 +409,15 @@ function CreateECRModal({ open, initialReq, allReqs, selectedProject, onClose, o
   );
 }
 
-/* ── Requirements page ────────────────────────────────────────────────────── */
+/* ── Страница требований ──────────────────────────────────────────────────── */
 export default function RequirementsPage({ selectedProject }) {
   const { token, user } = useAuth();
   const isSuper = user?.is_supervisor;
 
-  const [reqs,    setReqs]    = useState([]);
-  const [docs,    setDocs]    = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [reqs,       setReqs]       = useState([]);
+  const [docs,       setDocs]       = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [pdfView,    setPdfView]    = useState(null); // { docId, title, hasFile }
 
   const [detailReq,   setDetailReq]   = useState(null);
   const [approvalReq, setApprovalReq] = useState(null);
@@ -413,9 +428,7 @@ export default function RequirementsPage({ selectedProject }) {
     setLoading(true);
     try {
       const [reqData, docData] = await Promise.all([
-        selectedProject
-          ? API.projReqs(selectedProject.id, token)
-          : API.requirements(token),
+        selectedProject ? API.projReqs(selectedProject.id, token) : API.requirements(token),
         API.documents(token),
       ]);
       setReqs(reqData ?? []);
@@ -432,20 +445,37 @@ export default function RequirementsPage({ selectedProject }) {
     { key: 'title',          label: 'Название',  render: v => (
       <span style={{ fontWeight: 600, color: C.navy }}>{v}</span>
     )},
-    { key: 'type_name',      label: 'Тип'        },
+    { key: 'type',      label: 'Тип'        },
     { key: 'version_number', label: 'Версия',    render: v => `v${v}` },
     { key: 'status',         label: 'Статус',    render: v => <StatusBadge status={v} /> },
     { key: 'is_baseline',    label: 'Baseline',  render: v => v
-      ? <span style={{ color: C.success, fontWeight: 700 }}>✓ Да</span>
+      ? <span style={{ color: C.success, fontWeight: 700 }}>✓</span>
       : <span style={{ color: C.muted }}>—</span>
     },
     { key: 'created_at',     label: 'Создано',   render: fmtDate },
+    {
+      key: '_doc', label: '📄',
+      render: (_, row) => {
+        const srcDoc = docs.find(d => d.id === row.source_document_id);
+        if (!srcDoc?.file_path) return null;
+        return (
+          <Btn small variant="accent"
+            onClick={e => {
+              e.stopPropagation();
+              setPdfView({ docId: srcDoc.id, title: srcDoc.title, hasFile: true });
+            }}
+          >
+            📄
+          </Btn>
+        );
+      },
+    },
     ...(isSuper ? [{
       key: '_approval', label: '',
       render: (_, row) => (
-        <Btn small variant="accent"
+        <Btn small variant="ghost"
           onClick={e => { e.stopPropagation(); setApprovalReq(row); }}>
-          + Подтверждение
+          + Подтв.
         </Btn>
       ),
     }] : []),
@@ -457,21 +487,9 @@ export default function RequirementsPage({ selectedProject }) {
         title="Таблица требований"
         subtitle={`${selectedProject?.name ?? 'Все проекты'} · ${reqs.length} записей`}
       >
-        {isSuper && (
-          <Btn onClick={() => setShowCreate(true)}>+ Новое требование</Btn>
-        )}
+        {isSuper && <Btn onClick={() => setShowCreate(true)}>+ Новое требование</Btn>}
         <Btn onClick={load} variant="ghost" small>↻ Обновить</Btn>
       </PageHeader>
-
-      {!isSuper && (
-        <div style={{
-          background: '#EFF6FF', border: `1px solid ${C.border}`,
-          borderRadius: 10, padding: '12px 18px', marginBottom: 20,
-          fontSize: 14, color: C.muted,
-        }}>
-          Нажмите на строку для просмотра деталей и создания запроса на изменение.
-        </div>
-      )}
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <Table columns={columns} data={reqs} loading={loading} onRowClick={setDetailReq} />
@@ -498,6 +516,15 @@ export default function RequirementsPage({ selectedProject }) {
         onCreated={() => { setShowCreate(false); load(); }}
         selectedProject={selectedProject}
         documents={docs}
+      />
+
+      {/* PDF просмотр из таблицы */}
+      <PDFViewer
+        open={!!pdfView}
+        docId={pdfView?.docId}
+        title={pdfView?.title}
+        hasFile={!!pdfView?.hasFile}
+        onClose={() => setPdfView(null)}
       />
     </div>
   );
