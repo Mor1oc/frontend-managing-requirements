@@ -67,7 +67,7 @@ export default function LoginPage() {
             boxShadow: '0 8px 24px rgba(29,111,164,.28)',
           }}>📋</div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: C.navy, letterSpacing: '-.5px' }}>
-            ReqManager
+            NovaReq
           </h1>
           <p style={{ margin: '8px 0 0', color: C.muted, fontSize: 14 }}>
             {isReg ? 'Создайте аккаунт для работы' : 'Войдите в систему управления требованиями'}

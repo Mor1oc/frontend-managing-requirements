@@ -13,7 +13,7 @@ const ECO_TRANSITIONS = {
     { status: 'cancelled', label: 'Отменить',    variant: 'danger'  },
   ],
   approved: [
-    { status: 'executed',  label: '✓ Исполнено', variant: 'success' },
+    { status: 'executed',  label: '✓ Подтвердить изменения', variant: 'success' },
     { status: 'cancelled', label: 'Отменить',    variant: 'danger'  },
   ],
   executed:  [],
@@ -35,10 +35,7 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
 
     Promise.all([
       API.eco(ecoSummary.id, token),
-      // Загружаем ссылки req old_version → new_version
-      fetch(`${import.meta?.env?.VITE_API_URL ?? 'http://localhost:8080'}/eco/${ecoSummary.id}/links`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then(r => r.ok ? r.json() : []).catch(() => []),
+      API.ecoLinks(ecoSummary.id, token).catch(() => []),
     ])
       .then(([eco, lnks]) => { setDetail(eco); setLinks(lnks ?? []); })
       .catch(e => setErr(e.message))
@@ -67,15 +64,32 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
       {loading ? <Spinner /> : (
         <>
           <InfoGrid items={[
-            ['Запрос (ECR)',    d.ecr_title        ?? '—', false],
-            ['Исполнитель',    d.assigned_to_name  ?? '—', false],
-            ['Статус',         d.status,                   true ],
+            ['Запрос (ECR)',    d.ecr_title         ?? '—', false],
+            ['Исполнитель',    d.assigned_to_name   ?? '—', false],
+            ['Статус',         d.status,                    true ],
             ['Дата вступления', d.effective_date
               ? new Date(d.effective_date).toLocaleDateString('ru') : '—', false],
             ['Создано',        d.created_at
               ? new Date(d.created_at).toLocaleDateString('ru') : '—', false],
           ]} />
+{d.description && (
+  <div style={{
+    background: '#F8FBFF', borderRadius: 9,
+    padding: '14px 16px', marginBottom: 16,
+  }}>
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: C.muted,
+      textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6,
+    }}>
+      Новое описание требования
+    </div>
 
+    <p style={{ margin: 0, fontSize: 14, color: C.text, lineHeight: 1.7 }}>
+      {d.description}
+    </p>
+  </div>
+)}
+          {/* Обоснование — одно поле (justification = changeReason) */}
           {d.justification && (
             <div style={{
               background: '#F8FBFF', borderRadius: 9,
@@ -84,63 +98,82 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
               <div style={{
                 fontSize: 11, fontWeight: 700, color: C.muted,
                 textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6,
-              }}>Обоснование</div>
+              }}>
+                Обоснование и причина изменения
+              </div>
               <p style={{ margin: 0, fontSize: 14, color: C.text, lineHeight: 1.7 }}>
                 {d.justification}
               </p>
             </div>
           )}
 
-          {/* Требования, затронутые этим распоряжением */}
+          {/* Изменения требований old_version → new_version */}
           {links.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{
-                fontSize: 14, fontWeight: 700, color: C.navy, marginBottom: 10,
-                borderTop: `1px solid ${C.border}`, paddingTop: 16,
-              }}>
-                Затронутые требования
+            <div style={{
+              borderTop: `1px solid ${C.border}`,
+              paddingTop: 18, marginBottom: 18,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.navy, marginBottom: 12 }}>
+                Изменения требований
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {links.map(lnk => (
                   <div key={`${lnk.requirement_id}-${lnk.old_version}`} style={{
                     background: d.status === 'executed' ? '#F0FDF4' : '#F8FBFF',
-                    border: `1px solid ${d.status === 'executed' ? '#86EFAC' : C.border}`,
-                    borderRadius: 9, padding: '12px 16px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: 12,
+                    border: `1.5px solid ${d.status === 'executed' ? '#86EFAC' : C.border}`,
+                    borderRadius: 10, padding: '12px 16px',
                   }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
-                        ID: {lnk.requirement_id.slice(0, 8)}…
-                      </div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
+                      Требование:{' '}
+                      <code style={{
+                        background: '#EFF6FF', padding: '1px 6px', borderRadius: 4,
+                        fontSize: 11,
+                      }}>
+                        {lnk.requirement_id}
+                      </code>
+                    </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'center',
+                      gap: 12, flexWrap: 'wrap',
+                    }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>До</div>
                         <span style={{
                           background: '#FEF9C3', color: '#713F12',
-                          padding: '3px 10px', borderRadius: 999,
-                          fontSize: 12, fontWeight: 600,
+                          padding: '4px 16px', borderRadius: 999,
+                          fontSize: 13, fontWeight: 700,
                         }}>
-                          v{lnk.old_version} (до)
+                          v{lnk.old_version}
                         </span>
-                        <span style={{ color: C.muted, fontSize: 14 }}>→</span>
+                      </div>
+
+                      <span style={{ color: C.muted, fontSize: 22 }}>→</span>
+
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>После</div>
                         <span style={{
                           background: d.status === 'executed' ? '#DCFCE7' : C.accent,
                           color:      d.status === 'executed' ? '#14532D' : C.navy,
-                          padding: '3px 10px', borderRadius: 999,
-                          fontSize: 12, fontWeight: 600,
+                          padding: '4px 16px', borderRadius: 999,
+                          fontSize: 13, fontWeight: 700,
+                          border: `1px solid ${d.status === 'executed' ? '#86EFAC' : 'transparent'}`,
                         }}>
                           v{lnk.new_version}
-                          {d.status === 'executed' ? ' ✓ baseline' : ' (новая)'}
+                          {d.status === 'executed' && ' ✓'}
                         </span>
                       </div>
+
+                      {d.status === 'executed' && (
+                        <span style={{
+                          marginLeft: 'auto',
+                          background: '#DCFCE7', color: '#14532D',
+                          padding: '4px 14px', borderRadius: 999,
+                          fontSize: 12, fontWeight: 700,
+                        }}>
+                          Стала baseline
+                        </span>
+                      )}
                     </div>
-                    {d.status === 'executed' && (
-                      <span style={{
-                        fontSize: 12, color: '#14532D', fontWeight: 600,
-                        background: '#DCFCE7', padding: '4px 12px', borderRadius: 999,
-                      }}>
-                        Стала baseline
-                      </span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -154,13 +187,13 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
               borderRadius: 10, padding: '14px 18px', marginBottom: 16,
               display: 'flex', alignItems: 'center', gap: 12,
             }}>
-              <span style={{ fontSize: 22 }}>✅</span>
+              <span style={{ fontSize: 24 }}>✅</span>
               <div>
                 <div style={{ fontWeight: 700, color: '#14532D', fontSize: 15 }}>
                   Распоряжение исполнено
                 </div>
                 <div style={{ color: '#15803D', fontSize: 13, marginTop: 2 }}>
-                  Новые версии требований автоматически получили статус baseline.
+                  Новые версии требований получили статус baseline.
                 </div>
               </div>
             </div>
@@ -184,17 +217,18 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: C.navy, marginBottom: 10 }}>
                 Изменить статус
               </div>
+
               {d.status === 'approved' && (
                 <div style={{
                   background: '#FFFBEB', border: '1px solid #FDE68A',
                   borderRadius: 8, padding: '10px 14px', marginBottom: 12,
                   fontSize: 13, color: '#92400E',
                 }}>
-                  ⚠️ После перевода в «Исполнено» все прикреплённые требования
-                  (новые версии) автоматически получат статус <strong>baseline</strong>.
-                  Это действие нельзя отменить.
+                  ⚠️ После подтверждения изменения все новые версии требований
+                  получат статус <strong>baseline</strong>, а предыдущие — сброшены.
                 </div>
               )}
+
               <div style={{ display: 'flex', gap: 10 }}>
                 {transitions.map(t => (
                   <Btn key={t.status} variant={t.variant}
@@ -217,7 +251,7 @@ function ECODetailModal({ open, ecoSummary, onClose, onUpdated }) {
   );
 }
 
-/* ── Страница распоряжений об изменениях ─────────────────────────────────── */
+/* ── Страница ECO ─────────────────────────────────────────────────────────── */
 export default function ChangeOrdersPage({ selectedProject }) {
   const { token } = useAuth();
   const [ecos,         setEcos]         = useState([]);
@@ -247,16 +281,18 @@ export default function ChangeOrdersPage({ selectedProject }) {
   );
 
   const columns = [
-    { key: 'title',           label: 'Название',  render: v => (
-      <span style={{ fontWeight: 600, color: C.navy }}>{v}</span>
-    )},
-    { key: 'ecr_title',       label: 'Запрос (ECR)', render: v => (
-      <span style={{ fontSize: 13, color: C.muted }}>{v ?? '—'}</span>
-    )},
-    { key: 'assigned_to_name',label: 'Исполнитель' },
-    { key: 'status',          label: 'Статус',    render: v => <StatusBadge status={v} /> },
-    { key: 'effective_date',  label: 'Дата',      render: fmtDate },
-    { key: 'created_at',      label: 'Создано',   render: fmtDate },
+    {
+      key: 'title', label: 'Название',
+      render: v => <span style={{ fontWeight: 600, color: C.navy }}>{v}</span>,
+    },
+    {
+      key: 'ecr_title', label: 'Запрос (ECR)',
+      render: v => <span style={{ fontSize: 13, color: C.muted }}>{v ?? '—'}</span>,
+    },
+    { key: 'assigned_to_name', label: 'Исполнитель' },
+    { key: 'status',           label: 'Статус',  render: v => <StatusBadge status={v} /> },
+    { key: 'effective_date',   label: 'Дата',    render: fmtDate },
+    { key: 'created_at',       label: 'Создано', render: fmtDate },
     {
       key: '_quick', label: '',
       render: (_, row) => {
@@ -288,11 +324,11 @@ export default function ChangeOrdersPage({ selectedProject }) {
       {/* Фильтр по статусу */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
-          ['all',       'Все',       ecos.length],
-          ['draft',     'Черновики', statusCounts.draft     ?? 0],
-          ['approved',  'Утверждены',statusCounts.approved  ?? 0],
-          ['executed',  'Исполнены', statusCounts.executed  ?? 0],
-          ['cancelled', 'Отменены',  statusCounts.cancelled ?? 0],
+          ['all',       'Все',        ecos.length],
+          ['draft',     'Черновики',  statusCounts.draft     ?? 0],
+          ['approved',  'Утверждены', statusCounts.approved  ?? 0],
+          ['executed',  'Подтверждены',  statusCounts.executed  ?? 0],
+          ['cancelled', 'Отменены',   statusCounts.cancelled ?? 0],
         ].map(([val, label, count]) => (
           <button key={val} onClick={() => setStatusFilter(val)} style={{
             background: statusFilter === val ? C.accent : '#fff',

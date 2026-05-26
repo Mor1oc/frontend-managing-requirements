@@ -24,24 +24,26 @@ function MainApp() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectsLoading, setProjectsLoading] = useState(true);
 
-  useEffect(() => {
+  const loadProjects = () => {
     API.projects(token)
       .then(data => {
         const list = data ?? [];
         setProjects(list);
-        if (list.length) setSelectedProject(list[0]);
+        // Сохраняем выбранный проект если он ещё существует
+        setSelectedProject(prev => {
+          if (prev && list.find(p => p.id === prev.id)) return prev;
+          return list[0] ?? null;
+        });
       })
       .catch(() => setProjects([]))
       .finally(() => setProjectsLoading(false));
-  }, [token]);
+  };
 
-  // Если роль изменилась (например, после повышения без перелогина),
-  // переключаемся на первую доступную страницу
+  useEffect(() => { loadProjects(); }, [token]);
   useEffect(() => {
     if (!allowed.includes(page)) setPage(allowed[0]);
   }, [isSuper]);
 
-  // Коллбэк для Header: новый проект добавляется в список и сразу выбирается
   const handleProjectCreated = (newProject) => {
     setProjects(prev => [...prev, newProject]);
     setSelectedProject(newProject);
@@ -52,10 +54,7 @@ function MainApp() {
     fetch(API.specUrl(selectedProject.id), {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.blob();
-      })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
       .then(blob => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -68,9 +67,7 @@ function MainApp() {
   };
 
   const renderPage = () => {
-    if (projectsLoading) {
-      return <div style={{ paddingTop: 80 }}><Spinner /></div>;
-    }
+    if (projectsLoading) return <div style={{ paddingTop: 80 }}><Spinner /></div>;
     switch (page) {
       case 'analytics':    return <AnalyticsPage      selectedProject={selectedProject} />;
       case 'requirements': return <RequirementsPage   selectedProject={selectedProject} />;
@@ -85,16 +82,14 @@ function MainApp() {
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT }}>
       <GlobalStyles />
       <Header
-        page={page}
-        setPage={setPage}
-        projects={projects}
+        page={page} setPage={setPage}
+        projects={projects} setProjects={setProjects}
         selectedProject={selectedProject}
         setSelectedProject={setSelectedProject}
         onProjectCreated={handleProjectCreated}
         onDownloadSpec={handleDownloadSpec}
       />
       <main style={{ maxWidth: 1400, margin: '0 auto', padding: '36px 32px' }}>
-        {/* Предупреждение если нет проектов */}
         {!projectsLoading && projects.length === 0 && (
           <div style={{
             background: '#FFFBEB', border: '1px solid #FDE68A',
@@ -103,13 +98,11 @@ function MainApp() {
           }}>
             <span style={{ fontSize: 22 }}>⚠️</span>
             <div>
-              <div style={{ fontWeight: 700, color: '#713F12' }}>
-                Нет доступных проектов
-              </div>
+              <div style={{ fontWeight: 700, color: '#713F12' }}>Нет доступных проектов</div>
               <div style={{ color: '#92400E', fontSize: 14, marginTop: 2 }}>
                 {isSuper
-                  ? 'Выберите «✚ Создать проект…» в выпадающем списке проектов.'
-                  : 'Обратитесь к супервайзеру для создания проекта.'}
+                  ? 'Выберите «✚ Создать проект…» в списке проектов.'
+                  : 'Обратитесь к супервайзеру.'}
               </div>
             </div>
           </div>
@@ -122,27 +115,14 @@ function MainApp() {
 
 function AppRouter() {
   const { user, ready } = useAuth();
-
-  if (!ready) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        background: C.bg, fontFamily: FONT,
-      }}>
-        <GlobalStyles />
-        <Spinner size={44} />
-      </div>
-    );
-  }
-
+  if (!ready) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+      <GlobalStyles /><Spinner size={44} />
+    </div>
+  );
   return user ? <MainApp /> : <LoginPage />;
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <AppRouter />
-    </AuthProvider>
-  );
+  return <AuthProvider><AppRouter /></AuthProvider>;
 }
